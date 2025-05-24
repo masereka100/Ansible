@@ -2,14 +2,42 @@
 - name: Install Nginx on managed host
   hosts: all
   become: yes
+
   tasks:
+
     - name: Install Nginx
       ansible.builtin.package:
         name: nginx
         state: present
+      register: nginx_install
+
+    - name: Print Nginx installation success message
+      ansible.builtin.debug:
+        msg: "✅ Nginx was successfully installed."
+      when: nginx_install.changed or nginx_install.rc == 0
+      failed_when: false
+
+    - name: Print Nginx installation failure message
+      ansible.builtin.debug:
+        msg: "❌ Failed to install Nginx!"
+      when: nginx_install.failed is defined and nginx_install.failed
+      failed_when: false
 
     - name: Ensure Nginx is started and enabled
       ansible.builtin.service:
         name: nginx
         state: started
         enabled: yes
+      register: nginx_service
+
+    - name: Print Nginx service success message
+      ansible.builtin.debug:
+        msg: "✅ Nginx service is started and enabled."
+      when: nginx_service.changed or nginx_service.state == "started"
+      failed_when: false
+
+    - name: Print Nginx service failure message
+      ansible.builtin.debug:
+        msg: "❌ Failed to start or enable Nginx service!"
+      when: nginx_service.failed is defined and nginx_service.failed
+      failed_when: false
