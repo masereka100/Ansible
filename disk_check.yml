@@ -15,7 +15,12 @@
       ansible.builtin.debug:
         msg: "Current disk usage: {{ usage_percent }}%"
 
-    - name: Send alert if disk usage exceeds threshold
-      ansible.builtin.fail:
-        msg: "Disk usage is critically high: {{ usage_percent }}%"
-      when: usage_percent > 80
+   - name: Display partition details
+      ansible.builtin.command: lsblk
+      register: partition_info
+
+    - name: Show partition information
+      ansible.builtin.debug:
+        msg: "{{ partition_info.stdout_lines }}"
+
+
