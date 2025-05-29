@@ -1,5 +1,5 @@
 ---
-- name: Monitor disk usage and send alerts
+- name: Monitor disk usage and display partition details
   hosts: all
   become: yes
   tasks:
@@ -15,7 +15,7 @@
       ansible.builtin.debug:
         msg: "Current disk usage: {{ usage_percent }}%"
 
-   - name: Display partition details
+    - name: Display partition details
       ansible.builtin.command: lsblk
       register: partition_info
 
