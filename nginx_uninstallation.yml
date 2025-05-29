@@ -1,0 +1,37 @@
+---
+- name: Completely uninstall Nginx and remove all related directories
+  hosts: all
+  become: yes
+  tasks:
+    - name: Stop Nginx service
+      ansible.builtin.systemd:
+        name: nginx
+        state: stopped
+        enabled: no
+      ignore_errors: yes
+
+    - name: Uninstall Nginx
+      ansible.builtin.yum:
+        name: nginx
+        state: absent
+      ignore_errors: yes
+
+    - name: Remove Nginx directories and files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/nginx
+        - /var/log/nginx
+        - /usr/share/nginx
+        - /var/cache/nginx
+        - /run/nginx.pid
+
+    - name: Find and remove additional Nginx-related files
+      ansible.builtin.shell: "find / -name '*nginx*' -exec rm -rf {} +"
+      register: removal_output
+      ignore_errors: yes
+
+    - name: Display removal output
+      ansible.builtin.debug:
+        msg: "{{ removal_output.stdout_lines }}"
