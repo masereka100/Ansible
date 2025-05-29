@@ -2,4 +2,17 @@
 - name: Monitor disk usage and send alerts
   hosts: all
   become: yes
+  tasks:
+    - name: Check disk usage
+      ansible.builtin.command: df -h /
+      register: disk_usage
+
+    - name: Extract disk usage percentage
+      ansible.builtin.shell: "df -h / | awk 'NR==2 {print $5}' | sed 's/%//'"
+      register: usage_percent
+
+    - name: Send alert if disk usage exceeds threshold
+      ansible.builtin.fail:
+        msg: "Disk usage is critically high: {{ usage_percent.stdout }}%"
+      when: usage_percent.stdout|int > 80
  
