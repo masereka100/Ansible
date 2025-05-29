@@ -8,11 +8,14 @@
       register: disk_usage
 
     - name: Extract disk usage percentage
-      ansible.builtin.shell: "df -h / | awk 'NR==2 {print $5}' | sed 's/%//'"
-      register: usage_percent
+      ansible.builtin.set_fact:
+        usage_percent: "{{ disk_usage.stdout_lines[1].split()[4] | regex_replace('%', '') | int }}"
+
+    - name: Display disk usage
+      ansible.builtin.debug:
+        msg: "Current disk usage: {{ usage_percent }}%"
 
     - name: Send alert if disk usage exceeds threshold
       ansible.builtin.fail:
-        msg: "Disk usage is critically high: {{ usage_percent.stdout }}%"
-      when: usage_percent.stdout|int > 80
- 
+        msg: "Disk usage is critically high: {{ usage_percent }}%"
+      when: usage_percent > 80
