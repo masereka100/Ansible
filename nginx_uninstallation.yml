@@ -1,37 +1,52 @@
 ---
-- name: Completely uninstall Nginx and remove all related directories
+- name: Completely remove Nginx from system
   hosts: all
-  become: yes
+  become: true
   tasks:
-    - name: Stop Nginx service
-      ansible.builtin.systemd:
+    - name: Stop Nginx service if running
+      systemd:
         name: nginx
         state: stopped
-        enabled: no
       ignore_errors: yes
 
-    - name: Uninstall Nginx
-      ansible.builtin.yum:
+    - name: Uninstall Nginx (YUM)
+      yum:
         name: nginx
         state: absent
-      ignore_errors: yes
 
-    - name: Remove Nginx directories and files
-      ansible.builtin.file:
+    - name: Uninstall Nginx (DNF)
+      dnf:
+        name: nginx
+        state: absent
+      when: ansible_pkg_mgr == "dnf"
+
+    - name: Remove Nginx directories
+      file:
         path: "{{ item }}"
         state: absent
       loop:
         - /etc/nginx
         - /var/log/nginx
-        - /usr/share/nginx
         - /var/cache/nginx
-        - /run/nginx.pid
+        - /usr/lib/nginx
+        - /usr/share/nginx
 
-    - name: Find and remove additional Nginx-related files
-      ansible.builtin.shell: "find / -name '*nginx*' -exec rm -rf {} +"
-      register: removal_output
-      ignore_errors: yes
+    - name: Remove systemd service files
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /usr/lib/systemd/system/nginx.service
+        - /lib/systemd/system/nginx.service
 
-    - name: Display removal output
-      ansible.builtin.debug:
-        msg: "{{ removal_output.stdout_lines }}"
+    - name: Reload systemd daemon
+      systemd:
+        daemon_reload: true
+
+    - name: Verify Nginx removal
+      command: "find / -name '*nginx*' -type d"
+      register: nginx_removal_check
+
+    - name: Display remaining Nginx-related directories
+      debug:
+        msg: "{{ nginx_removal_check.stdout_lines }}"
