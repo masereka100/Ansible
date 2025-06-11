@@ -1,0 +1,11 @@
+- name: Test Cisco switch
+  hosts: cisco
+  gather_facts: no
+  tasks:
+    - name: Show version
+      ios_command:
+        commands: show version
+      register: output
+
+    - debug:
+        var: output.stdout_lines
