@@ -10,26 +10,35 @@
       ansible.builtin.shell: ls -t /var/backups/rpm-packages-*.txt | head -n1
       register: snapshot_file
       changed_when: false
-      failed_when: snapshot_file.stdout == ""
 
     - name: Fail if no snapshot exists
       ansible.builtin.fail:
         msg: "No package snapshot found under /var/backups"
       when: snapshot_file.stdout == ""
 
+    - name: Filter snapshot to remove gpg-pubkey entries
+      ansible.builtin.shell: grep -v '^gpg-pubkey' {{ snapshot_file.stdout }}
+      register: filtered_snapshot
+      changed_when: false
+      when: snapshot_file.stdout != ""
+
     - name: Restore packages to versions from snapshot
-      ansible.builtin.shell: dnf -y install $(cat {{ snapshot_file.stdout }})
+      ansible.builtin.shell: dnf -y install $(echo "{{ filtered_snapshot.stdout }}")
       register: rollback_result
+      ignore_errors: yes
+      when: snapshot_file.stdout != ""
 
     - name: Show rollback result
       ansible.builtin.debug:
         var: rollback_result
+      when: snapshot_file.stdout != ""
 
     - name: Log rollback action
       ansible.builtin.lineinfile:
         path: /var/log/ansible-patching.log
         line: "Rollback executed on {{ ansible_date_time.date }} {{ ansible_date_time.time }} using snapshot {{ snapshot_file.stdout }}"
         create: yes
+      when: snapshot_file.stdout != ""
 
     - name: Reboot only if rollback changed packages
       ansible.builtin.reboot:
@@ -39,4 +48,4 @@
         pre_reboot_delay: 0
         post_reboot_delay: 30
         test_command: whoami
-      when: rollback_result.changed
+      when: rollback_result is defined and rollback_result.changed
