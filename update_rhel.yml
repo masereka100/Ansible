@@ -1,6 +1,6 @@
 ---
 - name: Patch RHEL servers and save package state (exclude kernel)
-  hosts: rhel_servers
+  hosts: all
   become: yes
 
   tasks:
