@@ -1,5 +1,5 @@
 ---
-- name: Rollback RHEL server to previous package versions
+- name: Rollback RHEL server to previous package versions (excluding kernel)
   hosts: rhel_servers
   become: yes
 
@@ -14,9 +14,9 @@
         msg: "No RPM backup found at /var/backups/rpm/rpm_list_before.txt. Cannot rollback."
       when: not rpm_backup.stat.exists
 
-    - name: Rollback to previous package versions
+    - name: Rollback to previous package versions (excluding kernel)
       shell: |
-        dnf -y downgrade $(cat /var/backups/rpm/rpm_list_before.txt | tr '\n' ' ')
+        dnf -y downgrade $(grep -v '^kernel' /var/backups/rpm/rpm_list_before.txt | tr '\n' ' ')
 
     - name: Reboot after rollback
       reboot:
