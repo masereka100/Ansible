@@ -1,57 +1,61 @@
----
 - name: Rollback RHEL system packages to last snapshot
   hosts: all
-  become: true
-  gather_facts: true
-
+  become: yes
   vars:
-    snapshot_dir: /var/log/rpm_snapshots
-    log_file: /var/log/ansible-patching.log
+    backup_dir: /var/backups
 
   tasks:
 
-    - name: Ensure snapshot directory exists
-      ansible.builtin.file:
-        path: "{{ snapshot_dir }}"
-        state: directory
-        mode: '0755'
+    - name: Gather facts
+      ansible.builtin.setup:
 
-    - name: Find latest snapshot file
-      ansible.builtin.find:
-        paths: "{{ snapshot_dir }}"
-        patterns: "rpm_snapshot-{{ inventory_hostname }}*.txt"
-        age_stamp: mtime
+    - name: Ensure snapshot directory exists
+      file:
+        path: "{{ backup_dir }}"
+        state: directory
+
+    - name: Find the latest RPM snapshot file
+      find:
+        paths: "{{ backup_dir }}"
+        patterns: "rpm-snapshot-{{ inventory_hostname }}-*.txt"
         recurse: no
-        file_type: file
-      register: snapshot_files
+        age: 0
+        age_stamp: mtime
+        sort: time
+      register: snapshot_file
 
     - name: Fail if no snapshot exists
-      ansible.builtin.fail:
+      fail:
         msg: "No RPM snapshot found for {{ inventory_hostname }}"
-      when: snapshot_files.matched == 0
+      when: snapshot_file.matched == 0
 
-    - name: Set snapshot file variable
-      ansible.builtin.set_fact:
-        snapshot_file: "{{ snapshot_files.files | sort(attribute='mtime') | last | map(attribute='path') | first }}"
+    - name: Read snapshot file
+      slurp:
+        src: "{{ snapshot_file.files[0].path }}"
+      register: snapshot_content
 
     - name: Restore packages to versions from snapshot
-      ansible.builtin.shell: |
-        xargs -a {{ snapshot_file }} sudo dnf install -y
+      dnf:
+        name: "{{ snapshot_content.content | b64decode | splitlines() }}"
+        state: present
       register: rollback_result
-      ignore_errors: yes
+
+    - name: Show rollback result
+      debug:
+        var: rollback_result
 
     - name: Log rollback action
-      ansible.builtin.lineinfile:
-        path: "{{ log_file }}"
+      lineinfile:
+        path: /var/log/ansible-rollback.log
+        line: "Rollback executed on {{ ansible_date_time.date }} {{ ansible_date_time.time }} using snapshot {{ snapshot_file.files[0].path }}"
         create: yes
-        line: "{{ ansible_date_time.iso8601 }} - Rollback output on {{ inventory_hostname }}: {{ rollback_result.stdout_lines }}"
 
     - name: Reboot only if rollback changed packages
-      ansible.builtin.reboot:
+      reboot:
         msg: "Reboot initiated by Ansible after rollback"
+        connect_timeout: 5
+        reboot_timeout: 600
         pre_reboot_delay: 0
         post_reboot_delay: 30
-        reboot_timeout: 600
         test_command: whoami
-      when: rollback_result is defined and rollback_result.stdout != ""
-
+      when: rollback_result.changed
