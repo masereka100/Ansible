@@ -1,6 +1,6 @@
 ---
 - name: Rollback RHEL server to previous package versions (excluding kernel)
-  hosts: rhel_servers
+  hosts: all
   become: yes
 
   tasks:
