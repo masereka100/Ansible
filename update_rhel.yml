@@ -1,59 +1,36 @@
+
 ---
-- name: Patch RHEL server (exclude kernel) with visibility checks
+- name: Apply security patches excluding kernel updates
   hosts: all
   become: yes
-
   tasks:
-    # --- Visibility Checks ---
-    - name: Show hostname
-      command: hostname
-      register: host_name
 
-    - name: Display hostname
-      debug:
-        msg: "Running patch process on {{ host_name.stdout }}"
+    - name: Show message that patching has started
+      ansible.builtin.shell: "echo 'Security patching started at $(date)' >> /var/log/ansible-patching.log"
+      changed_when: false
 
-    - name: Check subscription status
-      command: subscription-manager status
-      register: sub_status
-      ignore_errors: yes
-
-    - name: Display subscription status
-      debug:
-        var: sub_status.stdout_lines
-
-    - name: List enabled repos
-      command: subscription-manager repos --list-enabled
-      register: repo_list
-      ignore_errors: yes
-
-    - name: Display enabled repos
-      debug:
-        var: repo_list.stdout_lines
-
-    # --- Backup Current RPM State ---
-    - name: Save list of installed RPMs before patching
-      shell: |
-        mkdir -p /var/backups/rpm
-        rpm -qa --qf "%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}\n" \
-          > /var/backups/rpm/rpm_list_before.txt
-
-    # --- Run Update (Exclude Kernel) ---
-    - name: Update all packages except kernel
-      dnf:
-        name: "*"
+    - name: Apply security updates (exclude kernel)
+      ansible.builtin.dnf:
+        security: true
         state: latest
-        exclude: kernel*
+        exclude: "kernel*"
       register: update_result
-      ignore_errors: yes
 
     - name: Show update result
-      debug:
+      ansible.builtin.debug:
         var: update_result
 
-    # --- Reboot ---
-    - name: Reboot after patching
-      reboot:
-        msg: "Rebooting after patching..."
+    - name: Log update summary on server
+      ansible.builtin.shell: "echo 'Security patching completed at $(date)' >> /var/log/ansible-patching.log"
       when: update_result is succeeded
+      changed_when: false
 
+    - name: Reboot only if needed
+      ansible.builtin.reboot:
+        msg: "Rebooting after security patching"
+        connect_timeout: 5
+        reboot_timeout: 600
+        pre_reboot_delay: 0
+        post_reboot_delay: 30
+        test_command: whoami
+      when: update_result.changed
