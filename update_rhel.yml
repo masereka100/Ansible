@@ -1,24 +1,25 @@
----
 - name: Apply security updates (kernel excluded) with rollback snapshot
   hosts: all
   become: yes
+  vars:
+    backup_dir: /var/backups
 
   tasks:
 
     - name: Ensure backup directory exists
       file:
-        path: /var/backups
+        path: "{{ backup_dir }}"
         state: directory
         mode: '0755'
 
-    - name: Save list of installed RPMs before patching
+    - name: Save RPM snapshot before updates
       command: rpm -qa --qf "%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}\n"
-      register: installed_rpms
+      register: rpm_snapshot
 
-    - name: Write installed package list to dated backup file
+    - name: Write RPM snapshot to file
       copy:
-        content: "{{ installed_rpms.stdout }}"
-        dest: "/var/backups/rpm-packages-{{ ansible_date_time.date }}.txt"
+        content: "{{ rpm_snapshot.stdout }}"
+        dest: "{{ backup_dir }}/rpm-snapshot-{{ inventory_hostname }}-{{ ansible_date_time.iso8601 }}.txt"
         mode: '0644'
 
     - name: Apply only security updates (excluding kernel)
