@@ -1,36 +1,49 @@
-
 ---
-- name: Apply security patches excluding kernel updates
+- name: Apply security updates (kernel excluded) with rollback snapshot
   hosts: all
   become: yes
+
   tasks:
+    - name: Ensure backup directory exists
+      file:
+        path: /var/backups
+        state: directory
+        mode: '0755'
 
-    - name: Show message that patching has started
-      ansible.builtin.shell: "echo 'Security patching started at $(date)' >> /var/log/ansible-patching.log"
-      changed_when: false
+    - name: Save list of installed RPMs before patching
+      command: rpm -qa --qf "%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}\n"
+      register: installed_rpms
 
-    - name: Apply security updates (exclude kernel)
-      ansible.builtin.dnf:
-        security: true
+    - name: Write installed package list to dated backup file
+      copy:
+        content: "{{ installed_rpms.stdout }}"
+        dest: "/var/backups/rpm-packages-{{ ansible_date_time.date }}.txt"
+        mode: '0644'
+
+    - name: Apply only security updates (excluding kernel)
+      dnf:
+        security: yes
         state: latest
-        exclude: "kernel*"
-      register: update_result
+        exclude: kernel*
 
     - name: Show update result
-      ansible.builtin.debug:
+      debug:
         var: update_result
+      vars:
+        update_result: "{{ ansible_facts.packages | default({}) }}"
 
     - name: Log update summary on server
-      ansible.builtin.shell: "echo 'Security patching completed at $(date)' >> /var/log/ansible-patching.log"
-      when: update_result is succeeded
-      changed_when: false
+      lineinfile:
+        path: /var/log/ansible-patching.log
+        line: "Security patching completed on {{ ansible_date_time.date }} {{ ansible_date_time.time }} (kernel excluded)."
+        create: yes
 
     - name: Reboot only if needed
-      ansible.builtin.reboot:
-        msg: "Rebooting after security patching"
+      reboot:
+        msg: "Reboot initiated by Ansible after patching"
         connect_timeout: 5
         reboot_timeout: 600
         pre_reboot_delay: 0
         post_reboot_delay: 30
         test_command: whoami
-      when: update_result.changed
+      when: ansible_facts.packages is changed
