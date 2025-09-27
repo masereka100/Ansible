@@ -1,5 +1,5 @@
 ---
-- name: Patch RHEL server and save package state (exclude kernel)
+- name: Patch RHEL servers and save package state (exclude kernel)
   hosts: rhel_servers
   become: yes
 
