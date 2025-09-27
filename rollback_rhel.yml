@@ -37,7 +37,7 @@
 
     - name: Convert snapshot content to list of packages
       set_fact:
-        snapshot_packages: "{{ snapshot_content.content | b64decode | splitlines() }}"
+        snapshot_packages: "{{ snapshot_content.content | b64decode | string | split('\n') }}"
 
     - name: Restore packages to versions from snapshot
       dnf:
