@@ -1,21 +1,59 @@
 ---
-- name: Patch RHEL servers and save package state (exclude kernel)
+- name: Patch RHEL server (exclude kernel) with visibility checks
   hosts: all
   become: yes
 
   tasks:
+    # --- Visibility Checks ---
+    - name: Show hostname
+      command: hostname
+      register: host_name
+
+    - name: Display hostname
+      debug:
+        msg: "Running patch process on {{ host_name.stdout }}"
+
+    - name: Check subscription status
+      command: subscription-manager status
+      register: sub_status
+      ignore_errors: yes
+
+    - name: Display subscription status
+      debug:
+        var: sub_status.stdout_lines
+
+    - name: List enabled repos
+      command: subscription-manager repos --list-enabled
+      register: repo_list
+      ignore_errors: yes
+
+    - name: Display enabled repos
+      debug:
+        var: repo_list.stdout_lines
+
+    # --- Backup Current RPM State ---
     - name: Save list of installed RPMs before patching
       shell: |
         mkdir -p /var/backups/rpm
         rpm -qa --qf "%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}\n" \
           > /var/backups/rpm/rpm_list_before.txt
 
+    # --- Run Update (Exclude Kernel) ---
     - name: Update all packages except kernel
       dnf:
         name: "*"
         state: latest
         exclude: kernel*
+      register: update_result
+      ignore_errors: yes
 
+    - name: Show update result
+      debug:
+        var: update_result
+
+    # --- Reboot ---
     - name: Reboot after patching
       reboot:
         msg: "Rebooting after patching..."
+      when: update_result is succeeded
+
