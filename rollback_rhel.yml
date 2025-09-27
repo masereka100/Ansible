@@ -1,0 +1,23 @@
+---
+- name: Rollback RHEL server to previous package versions
+  hosts: rhel_servers
+  become: yes
+
+  tasks:
+    - name: Check if RPM backup list exists
+      stat:
+        path: /var/backups/rpm/rpm_list_before.txt
+      register: rpm_backup
+
+    - name: Fail if no RPM backup found
+      fail:
+        msg: "No RPM backup found at /var/backups/rpm/rpm_list_before.txt. Cannot rollback."
+      when: not rpm_backup.stat.exists
+
+    - name: Rollback to previous package versions
+      shell: |
+        dnf -y downgrade $(cat /var/backups/rpm/rpm_list_before.txt | tr '\n' ' ')
+
+    - name: Reboot after rollback
+      reboot:
+        msg: "Rebooting after rollback..."
