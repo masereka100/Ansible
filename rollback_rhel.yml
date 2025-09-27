@@ -1,10 +1,11 @@
+---
 - name: Rollback RHEL system packages to last snapshot
   hosts: all
   become: yes
   gather_facts: yes
 
   vars:
-    snapshot_dir: /var/backups
+    snapshot_dir: "/var/backups"
 
   tasks:
 
@@ -28,16 +29,18 @@
 
     - name: Determine the latest snapshot file
       set_fact:
-        latest_snapshot: "{{ snapshot_files.files | sort(attribute='mtime') | last }}"
+        latest_snapshot_file: "{{ (snapshot_files.files | sort(attribute='mtime'))[-1].path }}"
 
     - name: Read the latest snapshot file
       slurp:
-        src: "{{ latest_snapshot.path }}"
+        src: "{{ latest_snapshot_file }}"
       register: snapshot_content
 
-    - name: Convert snapshot content to list of packages
+    - name: Convert snapshot content to list of packages (exclude gpg keys)
       set_fact:
-        snapshot_packages: "{{ snapshot_content.content | b64decode | string | split('\n') }}"
+        snapshot_packages: >-
+          {{ snapshot_content.content | b64decode | string | split('\n') 
+             | reject('match', '^gpg-pubkey-') | list }}
 
     - name: Restore packages to versions from snapshot
       dnf:
@@ -49,15 +52,15 @@
     - name: Log rollback action
       lineinfile:
         path: /var/log/ansible-rollback.log
-        line: "Rollback performed on {{ ansible_date_time.date }} {{ ansible_date_time.time }}. Packages changed: {{ rollback_result.changed }}"
+        line: "Rollback performed on {{ ansible_date_time.date }} {{ ansible_date_time.time }}. Packages restored: {{ rollback_result.changed | default(false) }}"
         create: yes
 
     - name: Reboot only if rollback changed packages
       reboot:
-        msg: "Reboot initiated by Ansible after rollback"
+        msg: "Reboot initiated by Ansible after package rollback"
         connect_timeout: 5
         reboot_timeout: 600
         pre_reboot_delay: 0
         post_reboot_delay: 30
         test_command: whoami
-      when: rollback_result.changed | bool
+      when: rollback_result.changed | default(false)
