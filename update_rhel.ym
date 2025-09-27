@@ -1,0 +1,20 @@
+---
+- name: Patch RHEL server and save package state
+  hosts: rhel_servers
+  become: yes
+
+  tasks:
+    - name: Save list of installed RPMs before patching
+      shell: |
+        mkdir -p /var/backups/rpm
+        rpm -qa --qf "%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}\n" \
+          > /var/backups/rpm/rpm_list_before.txt
+
+    - name: Update all available packages
+      dnf:
+        name: "*"
+        state: latest
+
+    - name: Reboot after patching
+      reboot:
+        msg: "Rebooting after patching..."
