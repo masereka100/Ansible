@@ -1,23 +1,36 @@
 ---
-- name: Rollback RHEL server to previous package versions (excluding kernel)
+- name: Rollback to previous package versions from snapshot
   hosts: all
   become: yes
 
   tasks:
-    - name: Check if RPM backup list exists
-      stat:
-        path: /var/backups/rpm/rpm_list_before.txt
-      register: rpm_backup
+    - name: Find latest snapshot file
+      shell: ls -t /var/backups/rpm-packages-*.txt | head -n1
+      register: snapshot_file
+      changed_when: false
 
-    - name: Fail if no RPM backup found
+    - name: Fail if no snapshot exists
       fail:
-        msg: "No RPM backup found at /var/backups/rpm/rpm_list_before.txt. Cannot rollback."
-      when: not rpm_backup.stat.exists
+        msg: "No package snapshot found under /var/backups"
+      when: snapshot_file.stdout == ""
 
-    - name: Rollback to previous package versions (excluding kernel)
+    - name: Restore packages to versions from snapshot
       shell: |
-        dnf -y downgrade $(grep -v '^kernel' /var/backups/rpm/rpm_list_before.txt | tr '\n' ' ')
+        dnf -y install $(cat {{ snapshot_file.stdout }})
+      args:
+        warn: false
+
+    - name: Log rollback action
+      lineinfile:
+        path: /var/log/ansible-patching.log
+        line: "Rollback executed on {{ ansible_date_time.date }} {{ ansible_date_time.time }} using snapshot {{ snapshot_file.stdout }}"
+        create: yes
 
     - name: Reboot after rollback
       reboot:
-        msg: "Rebooting after rollback..."
+        msg: "Reboot initiated by Ansible after rollback"
+        connect_timeout: 5
+        reboot_timeout: 600
+        pre_reboot_delay: 0
+        post_reboot_delay: 30
+        test_command: whoami
