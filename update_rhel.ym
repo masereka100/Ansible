@@ -1,5 +1,5 @@
 ---
-- name: Patch RHEL server and save package state
+- name: Patch RHEL server and save package state (exclude kernel)
   hosts: rhel_servers
   become: yes
 
@@ -10,10 +10,11 @@
         rpm -qa --qf "%{NAME}-%{VERSION}-%{RELEASE}.%{ARCH}\n" \
           > /var/backups/rpm/rpm_list_before.txt
 
-    - name: Update all available packages
+    - name: Update all packages except kernel
       dnf:
         name: "*"
         state: latest
+        exclude: kernel*
 
     - name: Reboot after patching
       reboot:
